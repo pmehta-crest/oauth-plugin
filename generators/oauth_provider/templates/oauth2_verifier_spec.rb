@@ -1,44 +1,46 @@
+# frozen_string_literal: true
+
 require File.dirname(__FILE__) + '/../spec_helper'
 
 describe Oauth2Verifier do
   fixtures :client_applications, :users, :oauth_tokens
   before(:each) do
-    @verifier = Oauth2Verifier.create :client_application => client_applications(:one), :user=>users(:aaron), :scope => "bbbb aaaa"
+    @verifier = described_class.create client_application: client_applications(:one), user: users(:aaron), scope: 'bbbb aaaa'
   end
 
-  it "should be valid" do
-    @verifier.should be_valid
+  it 'is valid' do
+    expect(@verifier).to be_valid
   end
 
-  it "should have a code" do
+  it 'has a code' do
     @verifier.code.should_not be_nil
   end
 
-  it "should not have a secret" do
-    @verifier.secret.should be_nil
+  it 'does not have a secret' do
+    expect(@verifier.secret).to be_nil
   end
 
-  it "should be authorized" do
-    @verifier.should be_authorized
+  it 'is authorized' do
+    expect(@verifier).to be_authorized
   end
 
-  it "should not be invalidated" do
+  it 'is not invalidated' do
     @verifier.should_not be_invalidated
   end
 
-  it "should generate query string" do
-    @verifier.to_query.should == "code=#{@verifier.code}"
-    @verifier.state="bbbb aaaa"
-    @verifier.to_query.should == "code=#{@verifier.code}&state=bbbb%20aaaa"
+  it 'generates query string' do
+    expect(@verifier.to_query).to eq("code=#{@verifier.code}")
+    @verifier.state = 'bbbb aaaa'
+    expect(@verifier.to_query).to eq("code=#{@verifier.code}&state=bbbb%20aaaa")
   end
 
-  it "should properly exchange for token" do
+  it 'properly exchanges for token' do
     @token = @verifier.exchange!
-    @verifier.should be_invalidated
-    @token.user.should==@verifier.user
-    @token.client_application.should == @verifier.client_application
-    @token.should be_authorized
+    expect(@verifier).to be_invalidated
+    @token.user.should == @verifier.user
+    expect(@token.client_application).to eq(@verifier.client_application)
+    expect(@token).to be_authorized
     @token.should_not be_invalidated
-    @token.scope.should == @verifier.scope
+    expect(@token.scope).to eq(@verifier.scope)
   end
 end

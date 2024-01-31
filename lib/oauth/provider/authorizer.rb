@@ -1,4 +1,7 @@
+# frozen_string_literal: true
+
 require 'uri'
+require 'erb'
 
 module OAuth
   module Provider
@@ -12,21 +15,21 @@ module OAuth
       end
 
       def app
-        @app ||= ::ClientApplication.find_by_key!(params[:client_id])
+        @app ||= ::ClientApplication.find_by!(key: params[:client_id])
       end
 
       def code
-        @code ||= ::Oauth2Verifier.create! :client_application => app,
-                                      :user => @user,
-                                      :scope => @params[:scope],
-                                      :callback_url => @params[:redirect_uri]
+        @code ||= ::Oauth2Verifier.create! client_application: app,
+                                           user: @user,
+                                           scope: @params[:scope],
+                                           callback_url: @params[:redirect_uri]
       end
 
       def token
-        @token ||= ::Oauth2Token.create! :client_application => app,
-                                      :user => @user,
-                                      :scope => @params[:scope],
-                                      :callback_url => @params[:redirect_uri]
+        @token ||= ::Oauth2Token.create! client_application: app,
+                                         user: @user,
+                                         scope: @params[:scope],
+                                         callback_url: @params[:redirect_uri]
       end
 
       def authorized?
@@ -50,7 +53,7 @@ module OAuth
 
       def response
         r = {}
-        if ['token','code'].include? params[:response_type]
+        if %w[token code].include? params[:response_type]
           if authorized?
             if params[:response_type] == 'code'
               r[:code] = code.token
@@ -69,15 +72,15 @@ module OAuth
 
       def encode_response
         response.map do |k, v|
-          [URI.escape(k.to_s),URI.escape(v)] * "="
-        end * "&"
+          [ERB::Util.url_encode(k.to_s), ERB::Util.url_encode(v)].join('=')
+        end * '&'
       end
 
       protected
 
-        def base_uri
-          URI.parse(params[:redirect_uri] || app.callback_url)
-        end
+      def base_uri
+        URI.parse(app.callback_url)
+      end
     end
   end
 end
