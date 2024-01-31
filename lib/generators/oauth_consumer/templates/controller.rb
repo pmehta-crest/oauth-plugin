@@ -1,25 +1,26 @@
+# frozen_string_literal: true
+
 require 'oauth/controllers/consumer_controller'
 class OauthConsumersController < ApplicationController
   include Oauth::Controllers::ConsumerController
   # Replace this with the equivalent for your authentication framework
   # Eg. for devise
   #
-  #   before_filter :authenticate_user!, :only=>:index
-  before_filter :login_required, :only=>:index
+  #   before_action :authenticate_user!, :only=>:index
+  before_action :login_required, only: :index
 
   def index
-    @consumer_tokens=ConsumerToken.all :conditions=>{:user_id=>current_user.id}
-    @services=OAUTH_CREDENTIALS.keys-@consumer_tokens.collect{|c| c.class.service_name}
+    @consumer_tokens = ConsumerToken.all conditions: { user_id: current_user.id }
+    @services = OAUTH_CREDENTIALS.keys - @consumer_tokens.collect { |c| c.class.service_name }
   end
 
   def callback
-  	super
+    super
   end
 
   def client
     super
   end
-
 
   protected
 

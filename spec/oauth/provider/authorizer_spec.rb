@@ -1,202 +1,193 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'multi_json'
 require 'oauth/provider/authorizer'
 require 'dummy_provider_models'
 
 describe OAuth::Provider::Authorizer do
-
-
-  describe "Authorization code" do
-
-    describe "should issue code" do
-
+  describe 'Authorization code' do
+    describe 'should issue code' do
       before(:each) do
-        @user = double("user")
-        @app  = double("app")
-        @code = double("code", :token => "secret auth code")
+        @user = double('user')
+        @app  = double('app')
+        @code = double('code', token: 'secret auth code')
 
-        ::ClientApplication.should_receive(:find_by_key!).with('client id').and_return(@app)
+        expect(::ClientApplication).to receive(:find_by!).with(key: 'client id').and_return(@app)
+        allow(@app).to receive(:callback_url).and_return('http://mysite.com/callback')
       end
 
-      it "should allow" do
-        ::Oauth2Verifier.should_receive(:create!).with( :client_application=>@app,
-                                                  :user=>@user,
-                                                  :callback_url=>'http://mysite.com/callback',
-                                                  :scope => 'a b').and_return(@code)
+      it 'allows' do
+        expect(::Oauth2Verifier).to receive(:create!).with(client_application: @app,
+                                                           user: @user,
+                                                           callback_url: 'http://mysite.com/callback',
+                                                           scope: 'a b').and_return(@code)
 
-        @authorizer = OAuth::Provider::Authorizer.new @user, true, :response_type => 'code',
-                                                      :scope => "a b",
-                                                      :client_id => 'client id',
-                                                      :redirect_uri => 'http://mysite.com/callback'
+        @authorizer = described_class.new @user, true, response_type: 'code',
+                                                       scope: 'a b',
+                                                       client_id: 'client id',
+                                                       redirect_uri: 'http://mysite.com/callback'
 
-        @authorizer.redirect_uri.should == "http://mysite.com/callback?code=secret%20auth%20code"
-        @authorizer.should be_authorized
-
+        expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?code=secret%20auth%20code')
+        expect(@authorizer).to be_authorized
       end
 
-      it "should include state" do
-        ::Oauth2Verifier.should_receive(:create!).with( :client_application=>@app,
-                                                  :user=>@user,
-                                                  :callback_url=>'http://mysite.com/callback',
-                                                  :scope => 'a b').and_return(@code)
+      it 'includes state' do
+        expect(::Oauth2Verifier).to receive(:create!).with(client_application: @app,
+                                                           user: @user,
+                                                           callback_url: 'http://mysite.com/callback',
+                                                           scope: 'a b').and_return(@code)
 
-        @authorizer = OAuth::Provider::Authorizer.new @user, true, :response_type => 'code',
-                                                      :state => 'customer id',
-                                                      :scope => "a b",
-                                                      :client_id => 'client id',
-                                                      :redirect_uri => 'http://mysite.com/callback'
+        @authorizer = described_class.new @user, true, response_type: 'code',
+                                                       state: 'customer id',
+                                                       scope: 'a b',
+                                                       client_id: 'client id',
+                                                       redirect_uri: 'http://mysite.com/callback'
 
-        @authorizer.redirect_uri.should == "http://mysite.com/callback?code=secret%20auth%20code&state=customer%20id"
-        @authorizer.should be_authorized
-
+        expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?code=secret%20auth%20code&state=customer%20id')
+        expect(@authorizer).to be_authorized
       end
 
-      it "should allow query string in callback" do
-        ::Oauth2Verifier.should_receive(:create!).with( :client_application=>@app,
-                                                  :user=>@user,
-                                                  :callback_url=>'http://mysite.com/callback?this=one',
-                                                  :scope => 'a b').and_return(@code)
+      it 'allows query string in callback' do
+        expect(::Oauth2Verifier).to receive(:create!).with(client_application: @app,
+                                                           user: @user,
+                                                           callback_url: 'http://mysite.com/callback?this=one',
+                                                           scope: 'a b').and_return(@code)
 
-        @authorizer = OAuth::Provider::Authorizer.new @user, true, :response_type => 'code',
-                                                      :scope => "a b",
-                                                      :client_id => 'client id',
-                                                      :redirect_uri => 'http://mysite.com/callback?this=one'
-        @authorizer.should be_authorized
-        @authorizer.redirect_uri.should == "http://mysite.com/callback?this=one&code=secret%20auth%20code"
+        allow(@app).to receive(:callback_url).and_return('http://mysite.com/callback?this=one')
+        @authorizer = described_class.new @user, true, response_type: 'code',
+                                                       scope: 'a b',
+                                                       client_id: 'client id',
+                                                       redirect_uri: 'http://mysite.com/callback?this=one'
+        expect(@authorizer).to be_authorized
+        expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?this=one&code=secret%20auth%20code')
       end
     end
-
-
   end
 
-  describe "user does not authorize" do
+  describe 'user does not authorize' do
+    it 'sends error' do
+      @authorizer = described_class.new @user, false, response_type: 'code',
+                                                      scope: 'a b',
+                                                      client_id: 'client id',
+                                                      redirect_uri: 'http://mysite.com/callback'
 
-    it "should send error" do
-      @authorizer = OAuth::Provider::Authorizer.new @user, false, :response_type => 'code',
-                                                    :scope => "a b",
-                                                    :client_id => 'client id',
-                                                    :redirect_uri => 'http://mysite.com/callback'
-
-      @authorizer.redirect_uri.should == "http://mysite.com/callback?error=access_denied"
-      @authorizer.should_not be_authorized
-
+      expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?error=access_denied')
+      expect(@authorizer).not_to be_authorized
     end
 
-    it "should send error with state and query params in callback" do
-      @authorizer = OAuth::Provider::Authorizer.new @user, false, :response_type => 'code',
-                                                    :scope => "a b",
-                                                    :client_id => 'client id',
-                                                    :redirect_uri=>'http://mysite.com/callback?this=one',
-                                                    :state => "my customer"
+    it 'sends error with state and query params in callback' do
+      app = instance_double('ClientApplication')
+      allow(::ClientApplication).to receive(:find_by!).and_return(app)
+      allow(app).to receive(:callback_url).and_return('http://mysite.com/callback?this=one')
 
-      @authorizer.redirect_uri.should == "http://mysite.com/callback?this=one&error=access_denied&state=my%20customer"
-      @authorizer.should_not be_authorized
+      @authorizer = described_class.new @user, false, response_type: 'code',
+                                                      scope: 'a b',
+                                                      client_id: 'client id',
+                                                      redirect_uri: 'http://mysite.com/callback?this=one',
+                                                      state: 'my customer'
 
+      expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?this=one&error=access_denied&state=my%20customer')
+      expect(@authorizer).not_to be_authorized
     end
-
   end
 
-  describe "Implict Grant" do
-
-    describe "should issue token" do
-
+  describe 'Implict Grant' do
+    describe 'should issue token' do
       before(:each) do
-        @user = double("user")
-        @app  = double("app")
-        @token = double("token", :token => "secret auth code")
+        @user = double('user')
+        @app  = double('app')
+        @token = double('token', token: 'secret auth code')
 
-        ::ClientApplication.should_receive(:find_by_key!).with('client id').and_return(@app)
+        expect(::ClientApplication).to receive(:find_by!).with(key: 'client id').and_return(@app)
+        allow(@app).to receive(:callback_url).and_return('http://mysite.com/callback')
       end
 
-      it "should allow" do
-        ::Oauth2Token.should_receive(:create!).with( :client_application=>@app,
-                                                  :user=>@user,
-                                                  :callback_url=>'http://mysite.com/callback',
-                                                  :scope => 'a b').and_return(@token)
+      it 'allows' do
+        expect(::Oauth2Token).to receive(:create!).with(client_application: @app,
+                                                        user: @user,
+                                                        callback_url: 'http://mysite.com/callback',
+                                                        scope: 'a b').and_return(@token)
 
-        @authorizer = OAuth::Provider::Authorizer.new @user, true, :response_type => 'token',
-                                                      :scope => "a b",
-                                                      :client_id => 'client id',
-                                                      :redirect_uri => 'http://mysite.com/callback'
+        @authorizer = described_class.new @user, true, response_type: 'token',
+                                                       scope: 'a b',
+                                                       client_id: 'client id',
+                                                       redirect_uri: 'http://mysite.com/callback'
 
-        @authorizer.redirect_uri.should == "http://mysite.com/callback#access_token=secret%20auth%20code"
-        @authorizer.should be_authorized
-
+        expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback#access_token=secret%20auth%20code')
+        expect(@authorizer).to be_authorized
       end
 
-      it "should include state" do
-        ::Oauth2Token.should_receive(:create!).with( :client_application=>@app,
-                                                  :user=>@user,
-                                                  :callback_url=>'http://mysite.com/callback',
-                                                  :scope => 'a b').and_return(@token)
+      it 'includes state' do
+        expect(::Oauth2Token).to receive(:create!).with(client_application: @app,
+                                                        user: @user,
+                                                        callback_url: 'http://mysite.com/callback',
+                                                        scope: 'a b').and_return(@token)
 
-        @authorizer = OAuth::Provider::Authorizer.new @user, true, :response_type => 'token',
-                                                      :state => 'customer id',
-                                                      :scope => "a b",
-                                                      :client_id => 'client id',
-                                                      :redirect_uri => 'http://mysite.com/callback'
+        @authorizer = described_class.new @user, true, response_type: 'token',
+                                                       state: 'customer id',
+                                                       scope: 'a b',
+                                                       client_id: 'client id',
+                                                       redirect_uri: 'http://mysite.com/callback'
 
-        @authorizer.redirect_uri.should == "http://mysite.com/callback#access_token=secret%20auth%20code&state=customer%20id"
-        @authorizer.should be_authorized
-
+        expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback#access_token=secret%20auth%20code&state=customer%20id')
+        expect(@authorizer).to be_authorized
       end
 
-      it "should allow query string in callback" do
-        ::Oauth2Token.should_receive(:create!).with( :client_application=>@app,
-                                                  :user=>@user,
-                                                  :callback_url=>'http://mysite.com/callback?this=one',
-                                                  :scope => 'a b').and_return(@token)
+      it 'allows query string in callback' do
+        allow(@app).to receive(:callback_url).and_return('http://mysite.com/callback?this=one')
 
-        @authorizer = OAuth::Provider::Authorizer.new @user, true, :response_type => 'token',
-                                                      :scope => "a b",
-                                                      :client_id => 'client id',
-                                                      :redirect_uri => 'http://mysite.com/callback?this=one'
-        @authorizer.should be_authorized
-        @authorizer.redirect_uri.should == "http://mysite.com/callback?this=one#access_token=secret%20auth%20code"
+        expect(::Oauth2Token).to receive(:create!).with(client_application: @app,
+                                                        user: @user,
+                                                        callback_url: 'http://mysite.com/callback?this=one',
+                                                        scope: 'a b').and_return(@token)
+
+        @authorizer = described_class.new @user, true, response_type: 'token',
+                                                       scope: 'a b',
+                                                       client_id: 'client id',
+                                                       redirect_uri: 'http://mysite.com/callback?this=one'
+        expect(@authorizer).to be_authorized
+        expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?this=one#access_token=secret%20auth%20code')
       end
     end
-
-
   end
 
-  describe "user does not authorize" do
+  describe 'user does not authorize' do
+    it 'sends error' do
+      @authorizer = described_class.new @user, false, response_type: 'token',
+                                                      scope: 'a b',
+                                                      client_id: 'client id',
+                                                      redirect_uri: 'http://mysite.com/callback'
 
-    it "should send error" do
-      @authorizer = OAuth::Provider::Authorizer.new @user, false, :response_type => 'token',
-                                                    :scope => "a b",
-                                                    :client_id => 'client id',
-                                                    :redirect_uri => 'http://mysite.com/callback'
-
-      @authorizer.redirect_uri.should == "http://mysite.com/callback#error=access_denied"
-      @authorizer.should_not be_authorized
-
+      expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback#error=access_denied')
+      expect(@authorizer).not_to be_authorized
     end
 
-    it "should send error with state and query params in callback" do
-      @authorizer = OAuth::Provider::Authorizer.new @user, false, :response_type => 'token',
-                                                    :scope => "a b",
-                                                    :client_id => 'client id',
-                                                    :redirect_uri=>'http://mysite.com/callback?this=one',
-                                                    :state => "my customer"
+    it 'sends error with state and query params in callback' do
+      app = instance_double('ClientApplication')
+      allow(::ClientApplication).to receive(:find_by!).and_return(app)
+      allow(app).to receive(:callback_url).and_return('http://mysite.com/callback?this=one')
 
-      @authorizer.redirect_uri.should == "http://mysite.com/callback?this=one#error=access_denied&state=my%20customer"
-      @authorizer.should_not be_authorized
+      @authorizer = described_class.new @user, false, response_type: 'token',
+                                                      scope: 'a b',
+                                                      client_id: 'client id',
+                                                      redirect_uri: 'http://mysite.com/callback?this=one',
+                                                      state: 'my customer'
 
+      expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback?this=one#error=access_denied&state=my%20customer')
+      expect(@authorizer).not_to be_authorized
     end
-
   end
 
-  it "should handle unsupported response type" do
-    @user = double("user")
+  it 'handles unsupported response type' do
+    @user = double('user')
 
-    @authorizer = OAuth::Provider::Authorizer.new @user, false, :response_type => 'my new',
-                                                  :scope => "a b",
-                                                  :client_id => 'client id',
-                                                  :redirect_uri => 'http://mysite.com/callback'
+    @authorizer = described_class.new @user, false, response_type: 'my new',
+                                                    scope: 'a b',
+                                                    client_id: 'client id',
+                                                    redirect_uri: 'http://mysite.com/callback'
 
-    @authorizer.redirect_uri.should == "http://mysite.com/callback#error=unsupported_response_type"
-    @authorizer.should_not be_authorized
-
+    expect(@authorizer.redirect_uri).to eq('http://mysite.com/callback#error=unsupported_response_type')
+    expect(@authorizer).not_to be_authorized
   end
-
 end
